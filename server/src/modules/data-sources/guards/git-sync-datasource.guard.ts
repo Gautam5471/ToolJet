@@ -13,7 +13,7 @@ import {
 // OAuth-handshake keys that ride along with a save but aren't persisted data source content
 // (see parseOptionsForOauthDataSource, which strips them after the token exchange) — irrelevant
 // to whether this edit is "secrets only".
-const OAUTH_FLOW_KEYS = new Set(['code', 'oauth2', 'provider', 'plugin_id']);
+const OAUTH_FLOW_KEYS = new Set(['code', 'oauth2', 'provider', 'plugin_id', 'state']);
 
 /**
  * True when every option in the incoming payload that actually differs from what's stored is

@@ -109,8 +109,16 @@ const OAuthWrapper = ({
   }
 
   function saveDataSource() {
-    optionchanged('code', localStorage.getItem('OAuthCode')).then(() => {
-      createDataSource();
+    const code = localStorage.getItem('OAuthCode');
+    const state = localStorage.getItem('OAuthState');
+    optionchanged('code', code).then(() => {
+      if (state) {
+        optionchanged('state', state).then(() => {
+          createDataSource();
+        });
+      } else {
+        createDataSource();
+      }
     });
   }
 

@@ -13,7 +13,7 @@ The Zoho Books plugin allows you to connect ToolJet applications directly to you
 
 ## Overview of Supported Operations
 
-The Zoho Books plugin supports 18 key operations spanning core financial and accounting modules:
+The Zoho Books plugin supports 17 key operations spanning core financial and accounting modules:
 
 * **Organizations**:
   - `List Organizations`: Fetch all organizations associated with your Zoho account. Use this to find your `Organization ID`.

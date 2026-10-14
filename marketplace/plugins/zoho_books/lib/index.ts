@@ -45,8 +45,8 @@ const REGION_CONFIGS: Record<string, RegionConfig> = {
     apiUrl: 'https://www.zohoapis.jp/books/v3',
   },
   ca: {
-    authUrl: 'https://accounts.zoho.ca/oauth/v2/auth',
-    tokenUrl: 'https://accounts.zoho.ca/oauth/v2/token',
+    authUrl: 'https://accounts.zohocloud.ca/oauth/v2/auth',
+    tokenUrl: 'https://accounts.zohocloud.ca/oauth/v2/token',
     apiUrl: 'https://www.zohoapis.ca/books/v3',
   },
   sa: {
@@ -114,7 +114,13 @@ export default class ZohoBooks implements QueryService {
 
     const scopes = getOption(sourceOptions, 'scopes') || 'ZohoBooks.fullaccess.all';
     const regionConfig = this.getRegionConfig(sourceOptions);
-    const state = crypto.randomUUID();
+
+    const clientSecret = getOption(sourceOptions, 'client_secret') || '';
+    const nonce = crypto.randomBytes(16).toString('hex');
+    const timestamp = Date.now().toString();
+    const hmacSecret = clientSecret || clientId;
+    const sig = crypto.createHmac('sha256', hmacSecret).update(`${nonce}:${timestamp}`).digest('hex');
+    const state = `${nonce}:${timestamp}:${sig}`;
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -127,6 +133,32 @@ export default class ZohoBooks implements QueryService {
     });
 
     return `${regionConfig.authUrl}?${params.toString()}`;
+  }
+
+  public validateState(state: string | undefined, clientId: string, clientSecret: string): boolean {
+    if (!state || typeof state !== 'string') {
+      return false;
+    }
+    const parts = state.split(':');
+    if (parts.length !== 3) {
+      return false;
+    }
+    const [nonce, timestampStr, sig] = parts;
+    const timestamp = parseInt(timestampStr, 10);
+    if (isNaN(timestamp)) {
+      return false;
+    }
+    // Allow up to 1 hour (3600 seconds) for OAuth flow completion
+    const now = Date.now();
+    if (now - timestamp > 60 * 60 * 1000 || timestamp > now + 5 * 60 * 1000) {
+      return false;
+    }
+    const hmacSecret = clientSecret || clientId;
+    const expectedSig = crypto.createHmac('sha256', hmacSecret).update(`${nonce}:${timestampStr}`).digest('hex');
+    if (sig.length !== expectedSig.length) {
+      return false;
+    }
+    return crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expectedSig, 'hex'));
   }
 
   async accessDetailsFrom(
@@ -145,6 +177,22 @@ export default class ZohoBooks implements QueryService {
     const clientSecret = getOption(sourceOptions, 'client_secret');
     if (!clientId || !clientSecret) {
       throw new QueryError('Invalid configuration', 'Missing client_id or client_secret for OAuth token exchange.', {});
+    }
+
+    // Validate OAuth state to prevent CSRF / mismatched callbacks
+    const skipStateValidation = getOption(sourceOptions, 'skip_state_validation') === 'true';
+    if (!skipStateValidation) {
+      const state = getOption(sourceOptions, 'state');
+      if (!state) {
+        throw new QueryError('Invalid OAuth state', 'Missing OAuth state parameter.', {
+          code: 'MISSING_OAUTH_STATE',
+        });
+      }
+      if (!this.validateState(state, clientId, clientSecret)) {
+        throw new QueryError('Invalid OAuth state', 'Mismatched or expired OAuth state parameter.', {
+          code: 'INVALID_OAUTH_STATE',
+        });
+      }
     }
 
     const host = getOption(sourceOptions, 'tj_redirect_host') || process.env.TOOLJET_HOST || '';
@@ -384,9 +432,8 @@ export default class ZohoBooks implements QueryService {
 
       if (typeof resBody === 'object' && resBody !== null) {
         const bodyObj = resBody as { code?: number; message?: string };
-        // Zoho Books returns code: 0 on success. Any non-zero code is an API error.
         if (bodyObj.code !== undefined && bodyObj.code !== 0) {
-          if (bodyObj.code === 57 || bodyObj.code === 14) {
+          if (bodyObj.code === 14) {
             throw new OAuthUnauthorizedClientError(
               'OAuth token expired or invalid',
               bodyObj.message || 'Token invalid',
