@@ -1,0 +1,139 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ToolJet/ToolJet/develop/plugins/schemas/manifest.schema.json",
+  "title": "Zoho Books",
+  "description": "Integrate with Zoho Books accounting API",
+  "type": "api",
+  "source": {
+    "name": "Zoho Books",
+    "kind": "zoho_books",
+    "exposedVariables": {
+      "isLoading": false,
+      "data": {},
+      "rawData": {}
+    },
+    "options": {
+      "client_id": {
+        "type": "string"
+      },
+      "client_secret": {
+        "type": "string",
+        "encrypted": true
+      },
+      "region": {
+        "type": "string"
+      },
+      "organization_id": {
+        "type": "string"
+      }
+    },
+    "customTesting": false
+  },
+  "defaults": {
+    "access_token_custom_headers": {
+      "value": [
+        [
+          "Content-Type",
+          "application/x-www-form-urlencoded"
+        ]
+      ]
+    },
+    "redirect_url": {
+      "value": ""
+    },
+    "auth_url": {
+      "value": "https://accounts.zoho.com/oauth/v2/auth"
+    },
+    "allowed_auth_types": {
+      "value": "oauth2"
+    },
+    "auth_type": {
+      "value": "oauth2"
+    },
+    "grant_type": {
+      "value": "authorization_code"
+    },
+    "scopes": {
+      "value": "ZohoBooks.fullaccess.all"
+    },
+    "oauth_type": {
+      "value": "custom_app"
+    },
+    "access_token_url": {
+      "value": "https://accounts.zoho.com/oauth/v2/token"
+    },
+    "region": {
+      "value": "com"
+    }
+  },
+  "properties": {
+    "region": {
+      "key": "region",
+      "type": "dropdown",
+      "label": "Data Center (Region)",
+      "description": "Select the Zoho data center where your organization account is hosted",
+      "list": [
+        {
+          "name": "United States (.com)",
+          "value": "com"
+        },
+        {
+          "name": "Europe (.eu)",
+          "value": "eu"
+        },
+        {
+          "name": "India (.in)",
+          "value": "in"
+        },
+        {
+          "name": "Australia (.com.au)",
+          "value": "com.au"
+        },
+        {
+          "name": "Japan (.jp)",
+          "value": "jp"
+        },
+        {
+          "name": "Canada (.ca)",
+          "value": "ca"
+        },
+        {
+          "name": "Saudi Arabia (.sa)",
+          "value": "sa"
+        }
+      ]
+    },
+    "organization_id": {
+      "key": "organization_id",
+      "type": "text",
+      "label": "Organization ID",
+      "description": "Zoho Books Organization ID (can be fetched using the List Organizations operation)",
+      "placeholder": "e.g. 7000123456"
+    },
+    "oauth": {
+      "key": "oauth",
+      "type": "react-component-oauth",
+      "description": "OAuth 2.0 authentication for Zoho Books",
+      "oauth_configs": {
+        "allowed_field_groups": {
+          "authorization_code": [
+            "client_id",
+            "client_secret",
+            "organization_id"
+          ]
+        },
+        "allowed_auth_types": [
+          "oauth2"
+        ],
+        "allowed_grant_types": [
+          "authorization_code"
+        ],
+        "allowed_scope_field": true
+      }
+    }
+  },
+  "required": [
+    "client_id",
+    "client_secret",
+    "scopes"
+  ]
+}
