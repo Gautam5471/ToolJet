@@ -180,19 +180,16 @@ export default class ZohoBooks implements QueryService {
     }
 
     // Validate OAuth state to prevent CSRF / mismatched callbacks
-    const skipStateValidation = getOption(sourceOptions, 'skip_state_validation') === 'true';
-    if (!skipStateValidation) {
-      const state = getOption(sourceOptions, 'state');
-      if (!state) {
-        throw new QueryError('Invalid OAuth state', 'Missing OAuth state parameter.', {
-          code: 'MISSING_OAUTH_STATE',
-        });
-      }
-      if (!this.validateState(state, clientId, clientSecret)) {
-        throw new QueryError('Invalid OAuth state', 'Mismatched or expired OAuth state parameter.', {
-          code: 'INVALID_OAUTH_STATE',
-        });
-      }
+    const state = getOption(sourceOptions, 'state');
+    if (!state) {
+      throw new QueryError('Invalid OAuth state', 'Missing OAuth state parameter.', {
+        code: 'MISSING_OAUTH_STATE',
+      });
+    }
+    if (!this.validateState(state, clientId, clientSecret)) {
+      throw new QueryError('Invalid OAuth state', 'Mismatched or expired OAuth state parameter.', {
+        code: 'INVALID_OAUTH_STATE',
+      });
     }
 
     const host = getOption(sourceOptions, 'tj_redirect_host') || process.env.TOOLJET_HOST || '';

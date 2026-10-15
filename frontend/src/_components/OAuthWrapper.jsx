@@ -91,8 +91,28 @@ const OAuthWrapper = ({
     datasourceService
       .fetchOauth2BaseUrl(...fetchArgs)
       .then((data) => {
+        let expectedState = null;
+        try {
+          const parsedUrl = new URL(data.url);
+          expectedState = parsedUrl.searchParams.get('state');
+        } catch {
+          // ignore parsing error if url is relative or custom
+        }
+
         localStorage.setItem('sourceWaitingForOAuth', 'newSource');
         localStorage.setItem('currentAppEnvironmentIdForOauth', currentAppEnvironmentId);
+        if (expectedState) {
+          try {
+            const flowData = {
+              provider,
+              sourceId: selectedDataSource?.id || 'newSource',
+              timestamp: Date.now(),
+            };
+            localStorage.setItem(`oauth_flow_${expectedState}`, JSON.stringify(flowData));
+          } catch {
+            // localStorage fallback
+          }
+        }
         optionchanged('provider', provider).then(() => {
           optionchanged('oauth2', true);
           if (plugin_id) {

@@ -26,6 +26,58 @@ class AuthorizeComponent extends React.Component {
 
     const sourceId = localStorage.getItem('sourceWaitingForOAuth');
     const current_organization_id = getCookie('orgIdForOauth');
+    // Check if this callback corresponds to a registered OAuth flow (e.g., Zoho Books)
+    let flowData = null;
+    if (state) {
+      try {
+        const rawFlow = localStorage.getItem(`oauth_flow_${state}`);
+        if (rawFlow) {
+          flowData = JSON.parse(rawFlow);
+        }
+      } catch {
+        // parsing error
+      }
+    }
+
+    // For Zoho Books, mandate strict transaction-binding validation of state before accepting callback
+    if (flowData?.provider === 'zoho_books') {
+      // Validate expiration (max 1 hour = 3600000ms)
+      if (flowData.timestamp && Date.now() - flowData.timestamp > 60 * 60 * 1000) {
+        localStorage.removeItem(`oauth_flow_${state}`);
+        this.setState({
+          isLoading: false,
+          authSuccess: false,
+          error: 'OAuth state has expired for Zoho Books authorization',
+        });
+        this.timer = setTimeout(() => {
+          window.close();
+        }, 3000);
+        return;
+      }
+
+      // Consume the expected state entry atomically for this flow
+      localStorage.removeItem(`oauth_flow_${state}`);
+    } else {
+      // If no valid per-flow record exists but state was provided or legacy provider was set,
+      // verify whether Zoho Books was expected via legacy keys
+      const legacyProvider = localStorage.getItem('oauth_initiating_provider');
+      if (legacyProvider === 'zoho_books') {
+        const legacyExpectedState = localStorage.getItem('oauth_expected_state');
+        if (!state || !legacyExpectedState || state !== legacyExpectedState) {
+          this.setState({
+            isLoading: false,
+            authSuccess: false,
+            error: 'Invalid or mismatched OAuth state parameter for Zoho Books authorization',
+          });
+          this.timer = setTimeout(() => {
+            window.close();
+          }, 3000);
+          return;
+        }
+        localStorage.removeItem('oauth_expected_state');
+        localStorage.removeItem('oauth_initiating_provider');
+      }
+    }
 
     if (sourceId !== 'newSource') {
       datasourceService

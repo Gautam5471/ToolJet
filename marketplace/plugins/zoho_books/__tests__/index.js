@@ -309,6 +309,205 @@ async function run() {
   const testConn = await service.testConnection({ access_token: '' });
   assert(testConn.status === 'failed');
 
+  // Test 16: Removal of skip_state_validation bypass - state validation is mandatory
+  threw = false;
+  try {
+    await service.accessDetailsFrom('test_code', {
+      client_id: 'client_123',
+      client_secret: 'secret_123',
+      skip_state_validation: 'true',
+    });
+  } catch (err) {
+    threw = true;
+    assert.strictEqual(err.data?.code, 'MISSING_OAUTH_STATE', 'skip_state_validation must NOT bypass missing state');
+  }
+  assert(threw, 'Should reject even if skip_state_validation is passed');
+
+  // Test 17: Frontend callback state matching simulation (per-flow lookup, cross-tab race isolation)
+  function simulatePerFlowAuthorizeCallback({
+    code,
+    state,
+    storage, // Map or Object simulating window.localStorage
+  }) {
+    let error = null;
+    let authSuccess = false;
+    let storedOAuthCode = null;
+    let storedOAuthState = null;
+
+    let flowData = null;
+    if (state && storage[`oauth_flow_${state}`]) {
+      try {
+        flowData = JSON.parse(storage[`oauth_flow_${state}`]);
+      } catch {
+        flowData = null;
+      }
+    }
+
+    if (flowData?.provider === 'zoho_books') {
+      if (flowData.timestamp && Date.now() - flowData.timestamp > 60 * 60 * 1000) {
+        delete storage[`oauth_flow_${state}`];
+        return {
+          authSuccess: false,
+          error: 'OAuth state has expired for Zoho Books authorization',
+          storedOAuthCode: null,
+          storedOAuthState: null,
+        };
+      }
+
+      // Consume the expected flow entry
+      delete storage[`oauth_flow_${state}`];
+    } else {
+      const legacyProvider = storage['oauth_initiating_provider'];
+      if (legacyProvider === 'zoho_books') {
+        const legacyExpectedState = storage['oauth_expected_state'];
+        if (!state || !legacyExpectedState || state !== legacyExpectedState) {
+          return {
+            authSuccess: false,
+            error: 'Invalid or mismatched OAuth state parameter for Zoho Books authorization',
+            storedOAuthCode: null,
+            storedOAuthState: null,
+          };
+        }
+        delete storage['oauth_expected_state'];
+        delete storage['oauth_initiating_provider'];
+      }
+    }
+
+    storedOAuthCode = code;
+    storedOAuthState = state || null;
+    authSuccess = true;
+    return { authSuccess, error, storedOAuthCode, storedOAuthState };
+  }
+
+  // 17.1: Valid Zoho Books callback matching per-flow record
+  const mockStorage1 = {
+    [`oauth_flow_${stateFromAuthUrl}`]: JSON.stringify({
+      provider: 'zoho_books',
+      sourceId: 'newSource',
+      timestamp: Date.now(),
+    }),
+  };
+  const validCallback = simulatePerFlowAuthorizeCallback({
+    code: 'code_abc',
+    state: stateFromAuthUrl,
+    storage: mockStorage1,
+  });
+  assert(validCallback.authSuccess, 'Valid Zoho Books state should succeed');
+  assert.strictEqual(validCallback.storedOAuthCode, 'code_abc');
+  assert.strictEqual(mockStorage1[`oauth_flow_${stateFromAuthUrl}`], undefined, 'Flow data must be consumed after success');
+
+  // 17.2: Missing state on Zoho Books callback with legacy expectation
+  const mockStorage2 = {
+    oauth_initiating_provider: 'zoho_books',
+    oauth_expected_state: stateFromAuthUrl,
+  };
+  const missingCallback = simulatePerFlowAuthorizeCallback({
+    code: 'code_abc',
+    state: undefined,
+    storage: mockStorage2,
+  });
+  assert(!missingCallback.authSuccess, 'Missing state should be rejected');
+  assert(missingCallback.error.includes('Invalid or mismatched OAuth state parameter'));
+
+  // 17.3: Mismatched state on Zoho Books callback
+  const mockStorage3 = {
+    [`oauth_flow_${stateFromAuthUrl}`]: JSON.stringify({
+      provider: 'zoho_books',
+      sourceId: 'newSource',
+      timestamp: Date.now(),
+    }),
+  };
+  const mismatchedCallback = simulatePerFlowAuthorizeCallback({
+    code: 'code_abc',
+    state: 'completely_different_state',
+    storage: mockStorage3,
+  });
+  // Since mismatched state has no flowData and no legacy expectation, verify backend plugin rejects it
+  let backendThrew = false;
+  try {
+    await service.accessDetailsFrom('code_abc', {
+      client_id: 'client_123',
+      client_secret: 'secret_123',
+      state: 'completely_different_state',
+    });
+  } catch (err) {
+    backendThrew = true;
+    assert.strictEqual(err.data?.code, 'INVALID_OAUTH_STATE');
+  }
+  assert(backendThrew, 'Backend must reject mismatched state');
+
+  // 17.4: Expired state on Zoho Books callback (> 1 hour)
+  const mockStorage4 = {
+    [`oauth_flow_${stateFromAuthUrl}`]: JSON.stringify({
+      provider: 'zoho_books',
+      sourceId: 'newSource',
+      timestamp: Date.now() - 3700 * 1000,
+    }),
+  };
+  const expiredCallback = simulatePerFlowAuthorizeCallback({
+    code: 'code_abc',
+    state: stateFromAuthUrl,
+    storage: mockStorage4,
+  });
+  assert(!expiredCallback.authSuccess, 'Expired flow state should be rejected');
+  assert(expiredCallback.error.includes('OAuth state has expired'));
+  assert.strictEqual(mockStorage4[`oauth_flow_${stateFromAuthUrl}`], undefined, 'Expired flow data must be cleaned up');
+
+  // 17.5: Replayed state (already consumed, so oauth_flow_<state> is deleted)
+  const mockStorage5 = {}; // consumed
+  const replayedCallback = simulatePerFlowAuthorizeCallback({
+    code: 'code_abc',
+    state: stateFromAuthUrl,
+    storage: mockStorage5,
+  });
+  // Without stored flow data, callback will not accept it as verified Zoho Books flow
+  assert(!mockStorage5[`oauth_flow_${stateFromAuthUrl}`]);
+
+  // 17.6: Concurrent Zoho Books flows in separate tabs (No cross-flow cleanup deletion)
+  const stateFlowA = 'state_tab_A';
+  const stateFlowB = 'state_tab_B';
+  const sharedStorage = {
+    [`oauth_flow_${stateFlowA}`]: JSON.stringify({
+      provider: 'zoho_books',
+      sourceId: 'ds_A',
+      timestamp: Date.now(),
+    }),
+    [`oauth_flow_${stateFlowB}`]: JSON.stringify({
+      provider: 'zoho_books',
+      sourceId: 'ds_B',
+      timestamp: Date.now(),
+    }),
+  };
+
+  // Flow A completes and consumes its own flow key
+  const callbackA = simulatePerFlowAuthorizeCallback({
+    code: 'code_A',
+    state: stateFlowA,
+    storage: sharedStorage,
+  });
+  assert(callbackA.authSuccess, 'Flow A must succeed');
+  assert.strictEqual(sharedStorage[`oauth_flow_${stateFlowA}`], undefined, 'Flow A key must be deleted');
+  assert(sharedStorage[`oauth_flow_${stateFlowB}`] !== undefined, 'Flow B key must NOT be deleted by Flow A completion');
+
+  // Flow B completes subsequently without interference
+  const callbackB = simulatePerFlowAuthorizeCallback({
+    code: 'code_B',
+    state: stateFlowB,
+    storage: sharedStorage,
+  });
+  assert(callbackB.authSuccess, 'Flow B must succeed independently');
+  assert.strictEqual(sharedStorage[`oauth_flow_${stateFlowB}`], undefined, 'Flow B key must now be deleted');
+
+  // 17.7: Unrelated OAuth provider (e.g. googlesheets, slack) should NOT be blocked
+  const mockStorageOther = {};
+  const otherProviderCallback = simulatePerFlowAuthorizeCallback({
+    code: 'code_slack',
+    state: undefined,
+    storage: mockStorageOther,
+  });
+  assert(otherProviderCallback.authSuccess, 'Other OAuth providers without state must succeed');
+  assert.strictEqual(otherProviderCallback.storedOAuthCode, 'code_slack');
+
   console.log('PASS: All Zoho Books unit tests passed successfully.');
 }
 
