@@ -86,7 +86,7 @@ describe('Authorize OAuth2 callback component', () => {
     expect(localStorage.getItem('OAuthCode')).toBeNull();
   });
 
-  test('rejects callback when organizationId in flowData mismatches current organization', async () => {
+  test('rejects callback when organizationId in flowData mismatches current organization (stale or mismatched)', async () => {
     const validState = 'zb:valid_nonce:1700000000000:valid_sig';
     localStorage.setItem(
       `oauth_flow_${validState}`,
@@ -99,6 +99,31 @@ describe('Authorize OAuth2 callback component', () => {
     );
     localStorage.setItem('sourceWaitingForOAuth', 'newSource');
     document.cookie = 'orgIdForOauth=org_B';
+
+    render(<Authorize />, { route: `/oauth2/authorize?code=valid_code_123&state=${validState}` });
+
+    await waitFor(() => {
+      expect(screen.getByText(/OAuth organization mismatch for Zoho Books authorization/i)).toBeInTheDocument();
+    });
+
+    expect(localStorage.getItem(`oauth_flow_${validState}`)).toBeNull();
+    expect(localStorage.getItem('OAuthCode')).toBeNull();
+  });
+
+  test('rejects callback when orgIdForOauth cookie is missing', async () => {
+    const validState = 'zb:valid_nonce:1700000000000:valid_sig';
+    localStorage.setItem(
+      `oauth_flow_${validState}`,
+      JSON.stringify({
+        provider: 'zoho_books',
+        sourceId: 'newSource',
+        orgId: 'org_A',
+        timestamp: Date.now(),
+      })
+    );
+    localStorage.setItem('sourceWaitingForOAuth', 'newSource');
+    // Clear cookie so orgIdForOauth is missing
+    document.cookie = 'orgIdForOauth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
 
     render(<Authorize />, { route: `/oauth2/authorize?code=valid_code_123&state=${validState}` });
 

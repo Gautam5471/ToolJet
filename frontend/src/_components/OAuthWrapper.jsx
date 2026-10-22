@@ -5,6 +5,7 @@ import { getHostURL } from '@/_helpers/routes';
 import { datasourceService, authenticationService } from '@/_services';
 import { capitalize } from 'lodash';
 import { toast } from 'react-hot-toast';
+import { setCookie } from '@/_helpers/cookie';
 import Button from '@/_ui/Button';
 import { ButtonSolid } from '@/_ui/AppButton/AppButton';
 import Input from '@/_ui/Input';
@@ -99,13 +100,17 @@ const OAuthWrapper = ({
           // ignore parsing error if url is relative or custom
         }
 
-        localStorage.setItem('sourceWaitingForOAuth', 'newSource');
+        const targetSourceId = selectedDataSource?.id || 'newSource';
+        localStorage.setItem('sourceWaitingForOAuth', targetSourceId);
         localStorage.setItem('currentAppEnvironmentIdForOauth', currentAppEnvironmentId);
+        if (organizationId) {
+          setCookie('orgIdForOauth', organizationId);
+        }
         if (expectedState) {
           try {
             const flowData = {
               provider,
-              sourceId: selectedDataSource?.id || 'newSource',
+              sourceId: targetSourceId,
               orgId: organizationId,
               timestamp: Date.now(),
             };

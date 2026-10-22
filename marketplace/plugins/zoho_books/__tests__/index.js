@@ -71,15 +71,28 @@ async function run() {
   });
   assert(authUrlIN.includes('https://accounts.zoho.in/oauth/v2/auth'), 'IN authUrl must use accounts.zoho.in');
 
-  // Test 2: authUrl missing client_id
+  // Test 2: authUrl missing client_id or client_secret
   let threw = false;
   try {
     service.authUrl({});
   } catch (err) {
     threw = true;
     assert((err.description || err.message).includes('Missing OAuth credentials'));
+    assert.strictEqual(err.data?.code, 'MISSING_CLIENT_ID');
   }
   assert(threw, 'Should throw if client_id is missing in authUrl');
+
+  threw = false;
+  try {
+    service.authUrl({
+      client_id: { value: 'client_123' },
+    });
+  } catch (err) {
+    threw = true;
+    assert((err.description || err.message).includes('Missing OAuth credentials'));
+    assert.strictEqual(err.data?.code, 'MISSING_CLIENT_SECRET');
+  }
+  assert(threw, 'Should throw if client_secret is missing in authUrl');
 
   // Test 3: OAuth state binding and validation (valid, missing, mismatched, expired, non-finite, future skew)
   const usParams = new URL(authUrlUS).searchParams;
@@ -87,6 +100,55 @@ async function run() {
   assert(stateFromAuthUrl, 'State must be present in authUrl');
   assert(stateFromAuthUrl.startsWith('zb:'), 'State must start with zb: prefix');
   assert(service.validateState(stateFromAuthUrl, 'client_123', 'secret_123'), 'Generated state should be valid');
+
+  // State validation with missing clientSecret should fail
+  assert.strictEqual(service.validateState(stateFromAuthUrl, 'client_123', ''), false, 'Missing clientSecret must fail');
+  assert.strictEqual(service.validateState(stateFromAuthUrl, 'client_123', undefined), false, 'Undefined clientSecret must fail');
+
+  // Signature format validation: malformed, truncated, non-hexadecimal, length mismatch
+  const crypto = require('crypto');
+  const testNonce = crypto.randomBytes(16).toString('hex');
+  const validTs = Date.now().toString();
+
+  // Non-hex characters in signature (e.g. contains 'g' or 'z')
+  const nonHexSig = 'g'.repeat(64);
+  assert.strictEqual(
+    service.validateState(`zb:${testNonce}:${validTs}:${nonHexSig}`, 'client_123', 'secret_123'),
+    false,
+    'Non-hexadecimal signature must fail validation'
+  );
+
+  // Truncated signature (< 64 characters)
+  const truncatedSig = 'a'.repeat(32);
+  assert.strictEqual(
+    service.validateState(`zb:${testNonce}:${validTs}:${truncatedSig}`, 'client_123', 'secret_123'),
+    false,
+    'Truncated signature (< 64 chars) must fail validation safely'
+  );
+
+  // 63-character signature (off by one short)
+  const shortSig = 'a'.repeat(63);
+  assert.strictEqual(
+    service.validateState(`zb:${testNonce}:${validTs}:${shortSig}`, 'client_123', 'secret_123'),
+    false,
+    '63-character signature must fail validation safely'
+  );
+
+  // 65-character signature (off by one long)
+  const longSig = 'a'.repeat(65);
+  assert.strictEqual(
+    service.validateState(`zb:${testNonce}:${validTs}:${longSig}`, 'client_123', 'secret_123'),
+    false,
+    '65-character signature must fail validation safely'
+  );
+
+  // Mismatched signature (valid hex, but wrong secret)
+  const mismatchedSig = crypto.createHmac('sha256', 'wrong_secret').update(`${testNonce}:${validTs}`).digest('hex');
+  assert.strictEqual(
+    service.validateState(`zb:${testNonce}:${validTs}:${mismatchedSig}`, 'client_123', 'secret_123'),
+    false,
+    'Mismatched signature must fail validation'
+  );
 
   // Missing state
   threw = false;
@@ -120,9 +182,8 @@ async function run() {
   assert.strictEqual(service.validateState(strippedState, 'client_123', 'secret_123'), false, 'Prefix-stripped state must be rejected');
 
   // Non-finite / NaN timestamp
-  const crypto = require('crypto');
-  const testNonce = crypto.randomBytes(16).toString('hex');
-  const nanState = `zb:${testNonce}:not_a_number:somesig`;
+  const testNonce2 = crypto.randomBytes(16).toString('hex');
+  const nanState = `zb:${testNonce2}:not_a_number:somesig`;
   assert.strictEqual(service.validateState(nanState, 'client_123', 'secret_123'), false, 'NaN timestamp state must fail');
 
   // Expired state (> 1 hour)

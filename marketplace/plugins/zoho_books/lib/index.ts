@@ -112,14 +112,19 @@ export default class ZohoBooks implements QueryService {
       });
     }
 
+    const clientSecret = getOption(sourceOptions, 'client_secret');
+    if (!clientSecret) {
+      throw new QueryError('Invalid configuration', 'Missing OAuth credentials: "client_secret" not provided.', {
+        code: 'MISSING_CLIENT_SECRET',
+      });
+    }
+
     const scopes = getOption(sourceOptions, 'scopes') || 'ZohoBooks.fullaccess.all';
     const regionConfig = this.getRegionConfig(sourceOptions);
 
-    const clientSecret = getOption(sourceOptions, 'client_secret') || '';
     const nonce = crypto.randomBytes(16).toString('hex');
     const timestamp = Date.now().toString();
-    const hmacSecret = clientSecret || clientId;
-    const sig = crypto.createHmac('sha256', hmacSecret).update(`${nonce}:${timestamp}`).digest('hex');
+    const sig = crypto.createHmac('sha256', clientSecret).update(`${nonce}:${timestamp}`).digest('hex');
     const state = `zb:${nonce}:${timestamp}:${sig}`;
 
     const params = new URLSearchParams({
@@ -135,8 +140,8 @@ export default class ZohoBooks implements QueryService {
     return `${regionConfig.authUrl}?${params.toString()}`;
   }
 
-  public validateState(state: string | undefined, clientId: string, clientSecret: string): boolean {
-    if (!state || typeof state !== 'string') {
+  public validateState(state: string | undefined, _clientId: string, clientSecret: string): boolean {
+    if (!state || typeof state !== 'string' || !clientSecret) {
       return false;
     }
     const parts = state.split(':');
@@ -145,6 +150,10 @@ export default class ZohoBooks implements QueryService {
     }
     const [, nonce, timestampStr, sig] = parts;
     if (!nonce || !timestampStr || !sig) {
+      return false;
+    }
+    // Signature must be a 64-character hexadecimal SHA-256 digest
+    if (!/^[0-9a-f]{64}$/i.test(sig)) {
       return false;
     }
     const timestamp = Number(timestampStr);
@@ -156,11 +165,7 @@ export default class ZohoBooks implements QueryService {
     if (now - timestamp > 60 * 60 * 1000 || timestamp > now + 5 * 60 * 1000) {
       return false;
     }
-    const hmacSecret = clientSecret || clientId;
-    const expectedSig = crypto.createHmac('sha256', hmacSecret).update(`${nonce}:${timestampStr}`).digest('hex');
-    if (sig.length !== expectedSig.length) {
-      return false;
-    }
+    const expectedSig = crypto.createHmac('sha256', clientSecret).update(`${nonce}:${timestampStr}`).digest('hex');
     return crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expectedSig, 'hex'));
   }
 
