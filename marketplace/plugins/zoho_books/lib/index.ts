@@ -120,7 +120,7 @@ export default class ZohoBooks implements QueryService {
     const timestamp = Date.now().toString();
     const hmacSecret = clientSecret || clientId;
     const sig = crypto.createHmac('sha256', hmacSecret).update(`${nonce}:${timestamp}`).digest('hex');
-    const state = `${nonce}:${timestamp}:${sig}`;
+    const state = `zb:${nonce}:${timestamp}:${sig}`;
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -140,15 +140,18 @@ export default class ZohoBooks implements QueryService {
       return false;
     }
     const parts = state.split(':');
-    if (parts.length !== 3) {
+    if (parts.length !== 4 || parts[0] !== 'zb') {
       return false;
     }
-    const [nonce, timestampStr, sig] = parts;
-    const timestamp = parseInt(timestampStr, 10);
-    if (isNaN(timestamp)) {
+    const [, nonce, timestampStr, sig] = parts;
+    if (!nonce || !timestampStr || !sig) {
       return false;
     }
-    // Allow up to 1 hour (3600 seconds) for OAuth flow completion
+    const timestamp = Number(timestampStr);
+    if (!Number.isFinite(timestamp)) {
+      return false;
+    }
+    // Allow up to 1 hour (3600 seconds) for OAuth flow completion, allowing up to 5 minutes of future clock skew
     const now = Date.now();
     if (now - timestamp > 60 * 60 * 1000 || timestamp > now + 5 * 60 * 1000) {
       return false;

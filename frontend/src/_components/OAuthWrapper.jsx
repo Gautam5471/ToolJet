@@ -106,6 +106,7 @@ const OAuthWrapper = ({
             const flowData = {
               provider,
               sourceId: selectedDataSource?.id || 'newSource',
+              orgId: organizationId,
               timestamp: Date.now(),
             };
             localStorage.setItem(`oauth_flow_${expectedState}`, JSON.stringify(flowData));
