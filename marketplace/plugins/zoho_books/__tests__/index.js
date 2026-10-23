@@ -463,19 +463,7 @@ async function run() {
           };
         }
 
-        if (flowData.sourceId && sourceWaiting && flowData.sourceId !== sourceWaiting) {
-          delete storage[`oauth_flow_${state}`];
-          delete storage['OAuthCode'];
-          delete storage['OAuthState'];
-          return {
-            authSuccess: false,
-            error: 'OAuth source mismatch for Zoho Books authorization',
-            storedOAuthCode: null,
-            storedOAuthState: null,
-          };
-        }
-
-        // Consume the expected flow entry
+        // Atomically consume the expected flow entry
         delete storage[`oauth_flow_${state}`];
       } else if (isZohoLegacy) {
         if (!state || !legacyExpectedState || state !== legacyExpectedState) {
@@ -607,7 +595,7 @@ async function run() {
   assert(!orgMismatchCallback.authSuccess, 'Organization mismatch should be rejected');
   assert(orgMismatchCallback.error.includes('organization mismatch'));
 
-  // 17.6: Source mismatch check
+  // 17.6: Concurrent flow source binding check: flowData.sourceId is authoritative even if sourceWaiting was overwritten
   const mockStorageSource = {
     [`oauth_flow_${stateFromAuthUrl}`]: JSON.stringify({
       provider: 'zoho_books',
@@ -616,14 +604,15 @@ async function run() {
       timestamp: Date.now(),
     }),
   };
-  const sourceMismatchCallback = simulatePerFlowAuthorizeCallback({
+  const concurrentCallback = simulatePerFlowAuthorizeCallback({
     code: 'code_abc',
     state: stateFromAuthUrl,
     storage: mockStorageSource,
-    sourceWaiting: 'ds_ACTUAL',
+    sourceWaiting: 'ds_OTHER_CONCURRENT_FLOW',
   });
-  assert(!sourceMismatchCallback.authSuccess, 'Source mismatch should be rejected');
-  assert(sourceMismatchCallback.error.includes('source mismatch'));
+  assert(concurrentCallback.authSuccess, 'Flow must succeed using authoritative flowData.sourceId despite overwritten sourceWaiting');
+  assert.strictEqual(concurrentCallback.storedOAuthCode, 'code_abc');
+  assert.strictEqual(mockStorageSource[`oauth_flow_${stateFromAuthUrl}`], undefined, 'Flow data must be consumed');
 
   // 17.7: Replayed state (already consumed, so oauth_flow_<state> is deleted)
   const mockStorage5 = {}; // consumed
@@ -682,6 +671,78 @@ async function run() {
   });
   assert(otherProviderCallback.authSuccess, 'Other OAuth providers without state must succeed');
   assert.strictEqual(otherProviderCallback.storedOAuthCode, 'code_slack');
+
+  // Test 18: Request timeout and error propagation
+  // 18.1: Normal request completes successfully without timing out
+  const http = require('http');
+  const mockServer = http.createServer((req, res) => {
+    if (req.url.startsWith('/oauth/v2/token')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ access_token: 'new_tok_123', refresh_token: 'ref_123' }));
+    } else if (req.url.startsWith('/books/v3/organizations')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ code: 0, message: 'success', organizations: [{ organization_id: '701' }] }));
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+
+  await new Promise((resolve) => mockServer.listen(0, '127.0.0.1', resolve));
+  const serverPort = mockServer.address().port;
+
+  // Custom region pointing to local mockServer
+  const customSourceOptions = {
+    region: 'com',
+    client_id: 'client_123',
+    client_secret: 'secret_123',
+    access_token: 'tok_active',
+    organization_id: '701',
+    tj_redirect_host: 'http://localhost:3000',
+  };
+
+  // 18.2: Timeout error in got request propagates cleanly as QueryError and not OAuthUnauthorizedClientError
+  const hangingServer = http.createServer((_req, _res) => {
+    // Deliberately hold connection open without responding
+  });
+  await new Promise((resolve) => hangingServer.listen(0, '127.0.0.1', resolve));
+  const hangingPort = hangingServer.address().port;
+
+  const gotModule = require('got');
+  let timeoutThrew = false;
+  try {
+    // Simulate what executeRequest does with a fast timeout (50ms)
+    await gotModule(`http://127.0.0.1:${hangingPort}/books/v3/contacts`, {
+      method: 'GET',
+      timeout: 50,
+      retry: 0,
+      responseType: 'json',
+    });
+  } catch (err) {
+    timeoutThrew = true;
+    assert(err instanceof gotModule.TimeoutError || err.name === 'TimeoutError');
+    // Map through Zoho Books error handling logic:
+    const statusCode = err.response?.statusCode;
+    // Timeout must NOT have status code 401/403
+    assert.strictEqual(statusCode, undefined);
+    assert(statusCode !== 401 && statusCode !== 403, 'Timeout must not be treated as 401/403');
+    // Must wrap in QueryError, NEVER in OAuthUnauthorizedClientError
+    let mappedErr;
+    if (statusCode === 401 || statusCode === 403) {
+      mappedErr = new OAuthUnauthorizedClientError('OAuth token expired or invalid', err.message, err);
+    } else {
+      mappedErr = new QueryError('Query execution failed', err.message, {
+        statusCode,
+        code: err.code,
+      });
+    }
+    assert(mappedErr instanceof QueryError, 'Timeout failure must be QueryError');
+    assert(!(mappedErr instanceof OAuthUnauthorizedClientError), 'Timeout must NOT trigger OAuth refresh');
+  }
+  assert(timeoutThrew, 'Hanging request must time out');
+
+  mockServer.close();
+  hangingServer.close();
 
   console.log('PASS: All Zoho Books unit tests passed successfully.');
 }

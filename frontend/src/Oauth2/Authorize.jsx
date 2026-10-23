@@ -78,9 +78,9 @@ class AuthorizeComponent extends React.Component {
             return;
           }
 
-          // Strictly validate sourceId binding (mandatory for Zoho Books flows)
-          if (!flowData.sourceId || !sourceId || flowData.sourceId !== sourceId) {
-            this.handleAuthFailure('OAuth source mismatch for Zoho Books authorization', state);
+          // Strictly require non-empty sourceId in registered flow data
+          if (!flowData.sourceId || typeof flowData.sourceId !== 'string' || flowData.sourceId.trim() === '') {
+            this.handleAuthFailure('Invalid or missing sourceId in OAuth flow data', state);
             return;
           }
 
@@ -103,9 +103,11 @@ class AuthorizeComponent extends React.Component {
         }
       }
 
-      if (sourceId !== 'newSource') {
+      const targetSourceId = flowData?.sourceId || sourceId;
+
+      if (targetSourceId !== 'newSource') {
         datasourceService
-          .setOauth2Token(sourceId, details, current_organization_id)
+          .setOauth2Token(targetSourceId, details, current_organization_id)
           .then(() => {
             this.setState({
               isLoading: false,

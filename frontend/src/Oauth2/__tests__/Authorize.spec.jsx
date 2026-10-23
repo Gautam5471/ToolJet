@@ -135,28 +135,89 @@ describe('Authorize OAuth2 callback component', () => {
     expect(localStorage.getItem('OAuthCode')).toBeNull();
   });
 
-  test('rejects callback when sourceId in flowData mismatches sourceWaitingForOAuth', async () => {
-    const validState = 'zb:valid_nonce:1700000000000:valid_sig';
+  test('uses authoritative sourceId from flowData even when global sourceWaitingForOAuth is overwritten by concurrent flow', async () => {
+    datasourceService.setOauth2Token.mockResolvedValueOnce({ status: 'ok' });
+    const flow1State = 'zb:nonce_flow1:1700000000000:sig1';
+    const flow2State = 'zb:nonce_flow2:1700000000000:sig2';
+
+    // Flow 1 started for ds_FLOW1
     localStorage.setItem(
-      `oauth_flow_${validState}`,
+      `oauth_flow_${flow1State}`,
       JSON.stringify({
         provider: 'zoho_books',
-        sourceId: 'ds_EXPECTED',
+        sourceId: 'ds_FLOW1',
+        orgId: 'org_TEST',
+        timestamp: Date.now(),
+      })
+    );
+
+    // Flow 2 starts concurrently and overwrites the origin-global sourceWaitingForOAuth
+    localStorage.setItem(
+      `oauth_flow_${flow2State}`,
+      JSON.stringify({
+        provider: 'zoho_books',
+        sourceId: 'ds_FLOW2',
+        orgId: 'org_TEST',
+        timestamp: Date.now(),
+      })
+    );
+    localStorage.setItem('sourceWaitingForOAuth', 'ds_FLOW2');
+    document.cookie = 'orgIdForOauth=org_TEST';
+
+    // Flow 1 callback arrives now; it must use its authoritative flowData.sourceId ('ds_FLOW1')
+    const { unmount } = render(<Authorize />, { route: `/oauth2/authorize?code=flow1_code&state=${flow1State}` });
+
+    await waitFor(() => {
+      expect(datasourceService.setOauth2Token).toHaveBeenCalledWith(
+        'ds_FLOW1',
+        { code: 'flow1_code', state: flow1State },
+        'org_TEST'
+      );
+    });
+
+    // Flow 1 record consumed; Flow 2 record must remain untouched
+    expect(localStorage.getItem(`oauth_flow_${flow1State}`)).toBeNull();
+    expect(localStorage.getItem(`oauth_flow_${flow2State}`)).not.toBeNull();
+
+    unmount();
+
+    // Flow 2 callback arrives now; it must use its authoritative flowData.sourceId ('ds_FLOW2')
+    datasourceService.setOauth2Token.mockResolvedValueOnce({ status: 'ok' });
+    render(<Authorize />, { route: `/oauth2/authorize?code=flow2_code&state=${flow2State}` });
+
+    await waitFor(() => {
+      expect(datasourceService.setOauth2Token).toHaveBeenCalledWith(
+        'ds_FLOW2',
+        { code: 'flow2_code', state: flow2State },
+        'org_TEST'
+      );
+    });
+
+    expect(localStorage.getItem(`oauth_flow_${flow2State}`)).toBeNull();
+  });
+
+  test('rejects callback when flowData has missing or empty sourceId', async () => {
+    const invalidSourceState = 'zb:nonce_bad_source:1700000000000:bad_sig';
+    localStorage.setItem(
+      `oauth_flow_${invalidSourceState}`,
+      JSON.stringify({
+        provider: 'zoho_books',
+        sourceId: '',
         orgId: 'org_TEST',
         timestamp: Date.now(),
       })
     );
     document.cookie = 'orgIdForOauth=org_TEST';
-    localStorage.setItem('sourceWaitingForOAuth', 'ds_DIFFERENT');
+    localStorage.setItem('sourceWaitingForOAuth', 'ds_FALLBACK');
 
-    render(<Authorize />, { route: `/oauth2/authorize?code=valid_code_123&state=${validState}` });
+    render(<Authorize />, { route: `/oauth2/authorize?code=bad_code&state=${invalidSourceState}` });
 
     await waitFor(() => {
-      expect(screen.getByText(/OAuth source mismatch for Zoho Books authorization/i)).toBeInTheDocument();
+      expect(screen.getByText('Invalid or missing sourceId in OAuth flow data')).toBeInTheDocument();
     });
 
-    expect(localStorage.getItem(`oauth_flow_${validState}`)).toBeNull();
-    expect(localStorage.getItem('OAuthCode')).toBeNull();
+    expect(localStorage.getItem(`oauth_flow_${invalidSourceState}`)).toBeNull();
+    expect(datasourceService.setOauth2Token).not.toHaveBeenCalled();
   });
 
   test('successfully validates and consumes state for a valid Zoho Books flow on existing source', async () => {

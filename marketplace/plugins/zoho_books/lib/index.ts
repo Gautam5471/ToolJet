@@ -18,6 +18,8 @@ interface RegionConfig {
   apiUrl: string;
 }
 
+const DEFAULT_TIMEOUT = 30000;
+
 const REGION_CONFIGS: Record<string, RegionConfig> = {
   com: {
     authUrl: 'https://accounts.zoho.com/oauth/v2/auth',
@@ -221,6 +223,7 @@ export default class ZohoBooks implements QueryService {
         },
         body: bodyParams.toString(),
         responseType: 'json',
+        timeout: DEFAULT_TIMEOUT,
       });
 
       const body = response.body as {
@@ -301,6 +304,7 @@ export default class ZohoBooks implements QueryService {
         },
         body: bodyParams.toString(),
         responseType: 'json',
+        timeout: DEFAULT_TIMEOUT,
       });
 
       const body = response.body as {
@@ -420,6 +424,7 @@ export default class ZohoBooks implements QueryService {
       },
       searchParams,
       responseType: 'json',
+      timeout: DEFAULT_TIMEOUT,
     };
 
     if (requireOrgId && orgId) {
