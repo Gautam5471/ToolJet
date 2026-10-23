@@ -443,11 +443,13 @@ export class DataSourcesUtilService implements IDataSourcesUtilService {
         // above, e.g. instance_url, are intentionally kept)
         options = options.filter(
           (option) =>
-            !['provider', 'code', 'oauth2', 'tokenData', 'access_token', 'refresh_token'].includes(option['key'])
+            !['provider', 'code', 'oauth2', 'tokenData', 'access_token', 'refresh_token', 'state'].includes(
+              option['key']
+            )
         );
         return options;
       }
-      options = options.filter((option) => !['provider', 'code', 'oauth2'].includes(option['key']));
+      options = options.filter((option) => !['provider', 'code', 'oauth2', 'state'].includes(option['key']));
     }
 
     return options;
@@ -512,7 +514,7 @@ export class DataSourcesUtilService implements IDataSourcesUtilService {
           newTokenDataObj,
           userId
         );
-        options = options.filter((option) => !['provider', 'code', 'oauth2'].includes(option['key']));
+        options = options.filter((option) => !['provider', 'code', 'oauth2', 'state'].includes(option['key']));
 
         options.push({
           key: 'tokenData',
@@ -531,7 +533,7 @@ export class DataSourcesUtilService implements IDataSourcesUtilService {
         }
       }
 
-      options = options.filter((option) => !['provider', 'code', 'oauth2'].includes(option['key']));
+      options = options.filter((option) => !['provider', 'code', 'oauth2', 'state'].includes(option['key']));
     }
 
     return options;
@@ -1265,7 +1267,8 @@ export class DataSourcesUtilService implements IDataSourcesUtilService {
     code: string,
     userId: string,
     environmentId?: string,
-    organizationId?: string
+    organizationId?: string,
+    state?: string
   ): Promise<void> {
     const sourceOptions = await this.parseSourceOptions(dataSource.options, organizationId, environmentId);
     const isMultiAuthEnabled = dataSource.options['multiple_auth_enabled']?.value;
@@ -1289,12 +1292,14 @@ export class DataSourcesUtilService implements IDataSourcesUtilService {
         'databricks',
         'asana',
         'confluence',
+        'zoho_books',
       ].includes(dataSource.kind)
     ) {
+      const optionsForPlugin = state ? { ...sourceOptions, state } : sourceOptions;
       const newTokenData = await this.fetchAPITokenFromPlugins(
         dataSource,
         code,
-        sourceOptions,
+        optionsForPlugin,
         isMultiAuthEnabled,
         userId,
         organizationId

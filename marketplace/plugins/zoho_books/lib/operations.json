@@ -1,0 +1,337 @@
+{
+  "$schema": "https://raw.githubusercontent.com/ToolJet/ToolJet/develop/plugins/schemas/operations.schema.json",
+  "title": "Zoho Books",
+  "description": "Operations supported by Zoho Books plugin",
+  "type": "api",
+  "properties": {
+    "operation": {
+      "key": "operation",
+      "type": "dropdown-component-flip",
+      "label": "Operation",
+      "description": "Select operation to perform",
+      "list": [
+        { "name": "List Organizations", "value": "list_organizations" },
+        { "name": "List Contacts", "value": "list_contacts" },
+        { "name": "Get Contact", "value": "get_contact" },
+        { "name": "Create Contact", "value": "create_contact" },
+        { "name": "Update Contact", "value": "update_contact" },
+        { "name": "List Invoices", "value": "list_invoices" },
+        { "name": "Get Invoice", "value": "get_invoice" },
+        { "name": "Create Invoice", "value": "create_invoice" },
+        { "name": "Update Invoice", "value": "update_invoice" },
+        { "name": "Email Invoice", "value": "email_invoice" },
+        { "name": "List Bills", "value": "list_bills" },
+        { "name": "Create Bill", "value": "create_bill" },
+        { "name": "List Expenses", "value": "list_expenses" },
+        { "name": "Create Expense", "value": "create_expense" },
+        { "name": "List Items", "value": "list_items" },
+        { "name": "Record Customer Payment", "value": "record_customer_payment" },
+        { "name": "List Chart of Accounts", "value": "list_chart_of_accounts" }
+      ]
+    },
+    "list_organizations": {},
+    "list_contacts": {
+      "properties": {
+        "page": {
+          "label": "Page",
+          "key": "page",
+          "type": "codehinter",
+          "placeholder": "1",
+          "height": "36px"
+        },
+        "per_page": {
+          "label": "Per Page",
+          "key": "per_page",
+          "type": "codehinter",
+          "placeholder": "200",
+          "height": "36px"
+        },
+        "sort_column": {
+          "label": "Sort Column",
+          "key": "sort_column",
+          "type": "codehinter",
+          "placeholder": "contact_name",
+          "height": "36px"
+        },
+        "filter_by": {
+          "label": "Filter By (e.g. Status.All, Status.Active)",
+          "key": "filter_by",
+          "type": "codehinter",
+          "placeholder": "Status.Active",
+          "height": "36px"
+        }
+      }
+    },
+    "get_contact": {
+      "properties": {
+        "contact_id": {
+          "label": "Contact ID",
+          "key": "contact_id",
+          "type": "codehinter",
+          "placeholder": "e.g. 70000000001",
+          "height": "36px"
+        }
+      }
+    },
+    "create_contact": {
+      "properties": {
+        "contact_data": {
+          "label": "Contact JSON Body",
+          "key": "contact_data",
+          "type": "codehinter",
+          "lineNumbers": true,
+          "height": "150px",
+          "placeholder": "{\n  \"contact_name\": \"Acme Corp\",\n  \"company_name\": \"Acme Inc\",\n  \"contact_type\": \"customer\"\n}"
+        }
+      }
+    },
+    "update_contact": {
+      "properties": {
+        "contact_id": {
+          "label": "Contact ID",
+          "key": "contact_id",
+          "type": "codehinter",
+          "placeholder": "e.g. 70000000001",
+          "height": "36px"
+        },
+        "contact_data": {
+          "label": "Contact JSON Body",
+          "key": "contact_data",
+          "type": "codehinter",
+          "lineNumbers": true,
+          "height": "150px",
+          "placeholder": "{\n  \"contact_name\": \"Acme Corp Updated\"\n}"
+        }
+      }
+    },
+    "list_invoices": {
+      "properties": {
+        "page": {
+          "label": "Page",
+          "key": "page",
+          "type": "codehinter",
+          "placeholder": "1",
+          "height": "36px"
+        },
+        "per_page": {
+          "label": "Per Page",
+          "key": "per_page",
+          "type": "codehinter",
+          "placeholder": "200",
+          "height": "36px"
+        },
+        "customer_id": {
+          "label": "Customer ID",
+          "key": "customer_id",
+          "type": "codehinter",
+          "placeholder": "Filter by customer ID",
+          "height": "36px"
+        },
+        "status": {
+          "label": "Status",
+          "key": "status",
+          "type": "codehinter",
+          "placeholder": "e.g. paid, unpaid, overdue, sent",
+          "height": "36px"
+        }
+      }
+    },
+    "get_invoice": {
+      "properties": {
+        "invoice_id": {
+          "label": "Invoice ID",
+          "key": "invoice_id",
+          "type": "codehinter",
+          "placeholder": "e.g. 70000000002",
+          "height": "36px"
+        }
+      }
+    },
+    "create_invoice": {
+      "properties": {
+        "invoice_data": {
+          "label": "Invoice JSON Body",
+          "key": "invoice_data",
+          "type": "codehinter",
+          "lineNumbers": true,
+          "height": "180px",
+          "placeholder": "{\n  \"customer_id\": \"70000000001\",\n  \"line_items\": [\n    {\n      \"item_id\": \"70000000005\",\n      \"rate\": 100,\n      \"quantity\": 1\n    }\n  ]\n}"
+        }
+      }
+    },
+    "update_invoice": {
+      "properties": {
+        "invoice_id": {
+          "label": "Invoice ID",
+          "key": "invoice_id",
+          "type": "codehinter",
+          "placeholder": "e.g. 70000000002",
+          "height": "36px"
+        },
+        "invoice_data": {
+          "label": "Invoice JSON Body",
+          "key": "invoice_data",
+          "type": "codehinter",
+          "lineNumbers": true,
+          "height": "180px",
+          "placeholder": "{\n  \"line_items\": [\n    {\n      \"item_id\": \"70000000005\",\n      \"rate\": 120,\n      \"quantity\": 1\n    }\n  ]\n}"
+        }
+      }
+    },
+    "email_invoice": {
+      "properties": {
+        "invoice_id": {
+          "label": "Invoice ID",
+          "key": "invoice_id",
+          "type": "codehinter",
+          "placeholder": "e.g. 70000000002",
+          "height": "36px"
+        },
+        "email_data": {
+          "label": "Email JSON Body (to_mail_ids, subject, body)",
+          "key": "email_data",
+          "type": "codehinter",
+          "lineNumbers": true,
+          "height": "150px",
+          "placeholder": "{\n  \"to_mail_ids\": [\"client@example.com\"],\n  \"subject\": \"Invoice from Our Company\",\n  \"body\": \"Here is your invoice.\"\n}"
+        }
+      }
+    },
+    "list_bills": {
+      "properties": {
+        "page": {
+          "label": "Page",
+          "key": "page",
+          "type": "codehinter",
+          "placeholder": "1",
+          "height": "36px"
+        },
+        "per_page": {
+          "label": "Per Page",
+          "key": "per_page",
+          "type": "codehinter",
+          "placeholder": "200",
+          "height": "36px"
+        },
+        "vendor_id": {
+          "label": "Vendor ID",
+          "key": "vendor_id",
+          "type": "codehinter",
+          "placeholder": "Filter by vendor ID",
+          "height": "36px"
+        },
+        "status": {
+          "label": "Status",
+          "key": "status",
+          "type": "codehinter",
+          "placeholder": "e.g. paid, unpaid, overdue",
+          "height": "36px"
+        }
+      }
+    },
+    "create_bill": {
+      "properties": {
+        "bill_data": {
+          "label": "Bill JSON Body",
+          "key": "bill_data",
+          "type": "codehinter",
+          "lineNumbers": true,
+          "height": "180px",
+          "placeholder": "{\n  \"vendor_id\": \"70000000003\",\n  \"bill_number\": \"BILL-001\",\n  \"line_items\": [\n    {\n      \"account_id\": \"70000000004\",\n      \"rate\": 50,\n      \"quantity\": 2\n    }\n  ]\n}"
+        }
+      }
+    },
+    "list_expenses": {
+      "properties": {
+        "page": {
+          "label": "Page",
+          "key": "page",
+          "type": "codehinter",
+          "placeholder": "1",
+          "height": "36px"
+        },
+        "per_page": {
+          "label": "Per Page",
+          "key": "per_page",
+          "type": "codehinter",
+          "placeholder": "200",
+          "height": "36px"
+        },
+        "sort_column": {
+          "label": "Sort Column",
+          "key": "sort_column",
+          "type": "codehinter",
+          "placeholder": "date",
+          "height": "36px"
+        }
+      }
+    },
+    "create_expense": {
+      "properties": {
+        "expense_data": {
+          "label": "Expense JSON Body",
+          "key": "expense_data",
+          "type": "codehinter",
+          "lineNumbers": true,
+          "height": "180px",
+          "placeholder": "{\n  \"account_id\": \"70000000004\",\n  \"paid_through_account_id\": \"70000000006\",\n  \"amount\": 75.0,\n  \"date\": \"2026-10-14\"\n}"
+        }
+      }
+    },
+    "list_items": {
+      "properties": {
+        "page": {
+          "label": "Page",
+          "key": "page",
+          "type": "codehinter",
+          "placeholder": "1",
+          "height": "36px"
+        },
+        "per_page": {
+          "label": "Per Page",
+          "key": "per_page",
+          "type": "codehinter",
+          "placeholder": "200",
+          "height": "36px"
+        },
+        "filter_by": {
+          "label": "Filter By (e.g. Status.All, Status.Active)",
+          "key": "filter_by",
+          "type": "codehinter",
+          "placeholder": "Status.Active",
+          "height": "36px"
+        }
+      }
+    },
+    "record_customer_payment": {
+      "properties": {
+        "payment_data": {
+          "label": "Payment JSON Body",
+          "key": "payment_data",
+          "type": "codehinter",
+          "lineNumbers": true,
+          "height": "180px",
+          "placeholder": "{\n  \"customer_id\": \"70000000001\",\n  \"payment_mode\": \"cash\",\n  \"amount\": 100.0,\n  \"date\": \"2026-10-14\",\n  \"invoices\": [\n    {\n      \"invoice_id\": \"70000000002\",\n      \"amount_applied\": 100.0\n    }\n  ]\n}"
+        }
+      }
+    },
+    "list_chart_of_accounts": {
+      "properties": {
+        "filter_by": {
+          "label": "Filter By (e.g. AccountType.Active, AccountType.All)",
+          "key": "filter_by",
+          "type": "codehinter",
+          "placeholder": "AccountType.All",
+          "height": "36px"
+        },
+        "sort_column": {
+          "label": "Sort Column",
+          "key": "sort_column",
+          "type": "codehinter",
+          "placeholder": "account_name",
+          "height": "36px"
+        }
+      }
+    }
+  }
+}

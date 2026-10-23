@@ -5,6 +5,7 @@ import { getHostURL } from '@/_helpers/routes';
 import { datasourceService, authenticationService } from '@/_services';
 import { capitalize } from 'lodash';
 import { toast } from 'react-hot-toast';
+import { setCookie } from '@/_helpers/cookie';
 import Button from '@/_ui/Button';
 import { ButtonSolid } from '@/_ui/AppButton/AppButton';
 import Input from '@/_ui/Input';
@@ -91,8 +92,33 @@ const OAuthWrapper = ({
     datasourceService
       .fetchOauth2BaseUrl(...fetchArgs)
       .then((data) => {
-        localStorage.setItem('sourceWaitingForOAuth', 'newSource');
+        let expectedState = null;
+        try {
+          const parsedUrl = new URL(data.url);
+          expectedState = parsedUrl.searchParams.get('state');
+        } catch {
+          // ignore parsing error if url is relative or custom
+        }
+
+        const targetSourceId = selectedDataSource?.id || 'newSource';
+        localStorage.setItem('sourceWaitingForOAuth', targetSourceId);
         localStorage.setItem('currentAppEnvironmentIdForOauth', currentAppEnvironmentId);
+        if (organizationId) {
+          setCookie('orgIdForOauth', organizationId);
+        }
+        if (expectedState) {
+          try {
+            const flowData = {
+              provider,
+              sourceId: targetSourceId,
+              orgId: organizationId,
+              timestamp: Date.now(),
+            };
+            localStorage.setItem(`oauth_flow_${expectedState}`, JSON.stringify(flowData));
+          } catch {
+            // localStorage fallback
+          }
+        }
         optionchanged('provider', provider).then(() => {
           optionchanged('oauth2', true);
           if (plugin_id) {
@@ -109,8 +135,16 @@ const OAuthWrapper = ({
   }
 
   function saveDataSource() {
-    optionchanged('code', localStorage.getItem('OAuthCode')).then(() => {
-      createDataSource();
+    const code = localStorage.getItem('OAuthCode');
+    const state = localStorage.getItem('OAuthState');
+    optionchanged('code', code).then(() => {
+      if (state) {
+        optionchanged('state', state).then(() => {
+          createDataSource();
+        });
+      } else {
+        createDataSource();
+      }
     });
   }
 

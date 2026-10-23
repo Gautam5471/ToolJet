@@ -419,5 +419,15 @@
     "tags": [
       "AI"
     ]
+  },
+  {
+    "name": "Zoho Books",
+    "description": "Integrate with Zoho Books accounting API",
+    "version": "1.0.0",
+    "id": "zoho_books",
+    "author": "Tooljet",
+    "timestamp": "Wed, 14 Oct 2026 07:51:38 GMT",
+    "repo": "",
+    "tags": ["Accounting"]
   }
 ]
